@@ -1,6 +1,6 @@
 #![feature(conservative_impl_trait, generators, generator_trait)]
 
-use std::ops::Generator;
+use std::ops::{Generator, Add, Mul};
 
 fn main() {
     println!("Hello, world!");
@@ -11,21 +11,21 @@ fn main() {
     }
 }
 
-trait Integrator {
-    fn step<F: Fn(f64, f64) -> f64>(&self, f: &F, x0: f64, t0: f64, dt: f64) -> f64;
+trait Integrator<F: Mul<f64, Output = F> + Add<Output = F> + Copy> {
+    fn step(&self, f: &Fn(f64, F) -> F, x0: F, t0: f64, dt: f64) -> F;
 
-    fn integrate<'a, F: Fn(f64, f64) -> f64>(&'a self, f: &'a F, mut x0: f64, mut t0: f64, dt: f64) -> Box<Generator<Return = f64, Yield = f64> + 'a> {
+    fn integrate<'a>(&'a self, f: &'a Fn(f64, F) -> F, mut x0: F, mut t0: f64, dt: f64) -> Box<Generator<Return = F, Yield = F> + 'a> {
         Box::new(move || {
             loop {
-            let x_next = self.step(f, x0, t0, dt);
-            yield x_next;
-            x0 = x_next;
-            t0 = t0 + dt;
+                let x_next = self.step(f, x0, t0, dt);
+                x0 = x_next;
+                yield x_next;
+                t0 = t0 + dt;
             }
         })
     }
 
-    fn integrate_to<F: Fn(f64, f64) -> f64>(&self, f: &F, mut x0: f64, mut t0: f64, t_end: f64, dt: f64) -> f64 {
+    fn integrate_to(&self, f: &Fn(f64, F) -> F, mut x0: F, mut t0: f64, t_end: f64, dt: f64) -> F {
         while t0 + dt < t_end {
             x0 = self.step(f, x0, t0, dt);
             t0 = t0 + dt;
@@ -39,8 +39,8 @@ trait Integrator {
 
 struct Euler;
 
-impl Integrator for Euler {
-    fn step<F: Fn(f64, f64) -> f64>(&self, f: &F, x0: f64, t0: f64, dt: f64) -> f64 {
-        x0 + dt * f(t0, x0)
+impl<F: Mul<f64, Output = F> + Add<Output = F> + Copy> Integrator<F> for Euler {
+    fn step(&self, f: &Fn(f64, F) -> F, x0: F, t0: f64, dt: f64) -> F {
+        x0 + f(t0, x0) * dt
     }
 }
