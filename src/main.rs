@@ -1,17 +1,29 @@
-//#[feature(conservative_impl_trait, generators, generator_trait)]
+extern crate stdweb;
+
+use stdweb::web::{document, INode, Node};
 
 fn main() {
-    println!("Hello, world!");
-    let funct = |t: f64, x: f64| -> f64 { t*x };
+    stdweb::initialize();
+    let root = document().query_selector("body").unwrap();
 
-    let mut x_this = 1.0;
-    let mut t_this = 0.0;
-    for _ in 0..10 {
-        let (x_next, t_next) = euler_step(&funct, x_this, 0.1, t_this);
-        println!("{} {}", x_next, t_next);
-        x_this = x_next;
-        t_this = t_next;
+    write_list(root.as_node(), (0..10).scan((1.0, 0.0), |&mut (ref mut x, ref mut t), _| {
+        let x0 = *x;
+        let (next_x, next_t) = euler_step(&|_, x| -x, *x, 0.1, *t);
+        *x = next_x;
+        *t = next_t;
+        Some(format!("{:.04}", x0))
+    }));
+}
+
+
+fn write_list<S: AsRef<str>, I: IntoIterator<Item=S>>(node: &Node, items: I) {
+    let list = document().create_element("ul");
+    for item in items {
+        let list_item = document().create_element("li");
+        list_item.set_text_content(item.as_ref());
+        list.append_child(&list_item);
     }
+    node.append_child(&list);
 }
 
 
