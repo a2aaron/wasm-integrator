@@ -1,4 +1,6 @@
-//#[feature(conservative_impl_trait, generators, generator_trait)]
+#![feature(conservative_impl_trait, generators, generator_trait)]
+
+use std::ops::Generator;
 
 fn main() {
     println!("Hello, world!");
@@ -12,6 +14,14 @@ fn main() {
         x_this = x_next;
         t_this = t_next;
     }
+}
+
+trait Integrator {
+    fn step(&self, dt: f64);
+
+    fn integrate<F: Fn(f64, f64) -> f64>(&self, f: &F, x0: f64, t0: f64) -> Generator<Return = f64, Yield = f64>;
+
+    fn integrate_to<F: Fn(f64, f64) -> f64>(&self, f: &F, x0: f64, t0: f64, t_end: f64);
 }
 
 
