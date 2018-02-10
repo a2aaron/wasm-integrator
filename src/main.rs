@@ -11,13 +11,13 @@ fn main() {
     }
 }
 
-trait Integrator<F: Mul<f64, Output = F> + Add<Output = F> + Copy> {
-    fn step(&self, f: &Fn(f64, F) -> F, x0: F, t0: f64, dt: f64) -> F;
+trait Integrator<'a, N: Mul<f64, Output = N> + Add<Output = N> + Copy + 'a> {
+    fn step<F: Fn(f64, N) -> N>(&self, f: F, x0: N, t0: f64, dt: f64) -> N;
 
-    fn integrate<'a>(&'a self, f: &'a Fn(f64, F) -> F, mut x0: F, mut t0: f64, dt: f64) -> Box<Generator<Return = F, Yield = F> + 'a> {
+    fn integrate<F: Fn(f64, N) -> N + 'a>(&'a self, f: F, mut x0: N, mut t0: f64, dt: f64) -> Box<Generator<Return = N, Yield = N> + 'a> {
         Box::new(move || {
             loop {
-                let x_next = self.step(f, x0, t0, dt);
+                let x_next = self.step(&f, x0, t0, dt);
                 x0 = x_next;
                 yield x_next;
                 t0 = t0 + dt;
@@ -25,22 +25,23 @@ trait Integrator<F: Mul<f64, Output = F> + Add<Output = F> + Copy> {
         })
     }
 
-    fn integrate_to(&self, f: &Fn(f64, F) -> F, mut x0: F, mut t0: f64, t_end: f64, dt: f64) -> F {
+    fn integrate_to<F: Fn(f64, N) -> N>(&self, f: F, mut x0: N, mut t0: f64, t_end: f64, dt: f64) -> N {
         while t0 + dt < t_end {
-            x0 = self.step(f, x0, t0, dt);
+            x0 = self.step(&f, x0, t0, dt);
             t0 = t0 + dt;
         }
         // Take one last small step to land right on t_end
         let t_diff = t_end - t0;
-        self.step(f, x0, t0, t_diff)
+        self.step(&f, x0, t0, t_diff)
     }
 }
 
 
 struct Euler;
 
-impl<F: Mul<f64, Output = F> + Add<Output = F> + Copy> Integrator<F> for Euler {
-    fn step(&self, f: &Fn(f64, F) -> F, x0: F, t0: f64, dt: f64) -> F {
+impl<'a, N: Mul<f64, Output = N> + Add<Output = N> + Copy + 'a> Integrator<'a, N> for Euler {
+    fn step<F: Fn(f64, N) -> N>(&self, f: F, x0: N, t0: f64, dt: f64) -> N {
         x0 + f(t0, x0) * dt
     }
 }
+
