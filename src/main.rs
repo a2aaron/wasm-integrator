@@ -1,4 +1,4 @@
-#![feature(conservative_impl_trait, generators, generator_trait)]
+#![feature(conservative_impl_trait, generators, generator_trait, never_type)]
 
 use std::ops::{Generator, Add, Mul};
 
@@ -11,10 +11,13 @@ fn main() {
     }
 }
 
-trait Integrator<'a, N: Mul<f64, Output = N> + Add<Output = N> + Copy + 'a> {
+trait Integrator<N: Mul<f64, Output = N> + Add<Output = N> + Copy> {
     fn step<F: Fn(f64, N) -> N>(&self, f: F, x0: N, t0: f64, dt: f64) -> N;
 
-    fn integrate<F: Fn(f64, N) -> N + 'a>(&'a self, f: F, mut x0: N, mut t0: f64, dt: f64) -> Box<Generator<Return = N, Yield = N> + 'a> {
+    fn integrate<'a, F>(&'a self, f: F, mut x0: N, mut t0: f64, dt: f64)
+        -> Box<Generator<Return = !, Yield = N> + 'a>
+        where N: 'a, F: Fn(f64, N) -> N + 'a
+    {
         Box::new(move || {
             loop {
                 let x_next = self.step(&f, x0, t0, dt);
@@ -39,7 +42,7 @@ trait Integrator<'a, N: Mul<f64, Output = N> + Add<Output = N> + Copy + 'a> {
 
 struct Euler;
 
-impl<'a, N: Mul<f64, Output = N> + Add<Output = N> + Copy + 'a> Integrator<'a, N> for Euler {
+impl<N: Mul<f64, Output = N> + Add<Output = N> + Copy> Integrator<N> for Euler {
     fn step<F: Fn(f64, N) -> N>(&self, f: F, x0: N, t0: f64, dt: f64) -> N {
         x0 + f(t0, x0) * dt
     }
