@@ -22,11 +22,12 @@ fn main() {
     let root = document().query_selector("body").unwrap();
     write_table(
         root.as_node(),
-        Some(("Time", "RK4 Position")),
-        to_iter(RK4.integrate(|t, x| -t * x, 1.1, 0.0, 0.1))
+        Some(("Time", "Euler Position", "RK4 Position")),
+        to_iter(Euler.integrate(|t, x| -t * x, 1.1, 0.0, 0.1))
+            .zip(to_iter(RK4.integrate(|t, x| -t * x, 1.1, 0.0, 0.1)))
             .take(11)
             .enumerate()
-            .map(|(i, x)| (i as f64 * 0.1, x)),
+            .map(|(i, (xe, xr))| (i as f64 * 0.1, xe, xr))
     );
 }
 
@@ -118,11 +119,32 @@ impl<'a, 'b> Into<TableRow> for (&'a str, &'b str) {
     }
 }
 
+impl<'a, 'b, 'c> Into<TableRow> for (&'a str, &'b str, &'c str) {
+    fn into(self) -> TableRow {
+        TableRow { cells: vec![
+            document().create_text_node(self.0).as_node().clone(),
+            document().create_text_node(self.1).as_node().clone(),
+            document().create_text_node(self.2).as_node().clone(),
+        ] }
+    }
+}
+
+
 impl Into<TableRow> for (f64, f64) {
     fn into(self) -> TableRow {
         TableRow { cells: vec![
             document().create_text_node(&format!("{:.6}", self.0)).as_node().clone(),
             document().create_text_node(&format!("{:.6}", self.1)).as_node().clone(),
+        ] }
+    }
+}
+
+impl Into<TableRow> for (f64, f64, f64) {
+    fn into(self) -> TableRow {
+        TableRow { cells: vec![
+            document().create_text_node(&format!("{:.6}", self.0)).as_node().clone(),
+            document().create_text_node(&format!("{:.6}", self.1)).as_node().clone(),
+            document().create_text_node(&format!("{:.6}", self.2)).as_node().clone(),
         ] }
     }
 }
