@@ -1,14 +1,33 @@
 #![feature(conservative_impl_trait, generators, generator_trait, never_type)]
 
-use std::ops::{Generator, Add, Mul};
+extern crate stdweb;
+
+use stdweb::web::{document, INode, Node};
+
+use std::ops::{GeneratorState, Generator, Add, Mul};
+
+fn to_iter<G, Y>(gen: G) -> impl Iterator<Item=Y>
+    where G: Generator<Yield=Y>
+{
+    (0..).scan(gen, |state, _| {
+        match state.resume() {
+            GeneratorState::Yielded(x) => Some(x),
+            GeneratorState::Complete(_) => None,
+        }
+    })
+}
 
 fn main() {
-    println!("Hello, world!");
-    let funct = |t: f64, x: f64| -> f64 { t*x };
-    let x_gen = Euler.integrate_to(&funct, 1.1, 0.0, 5.06, 0.1);
-    for _ in 0..10 {
-        println!("{:?}", x_gen);
-    }
+    stdweb::initialize();
+    let root = document().query_selector("body").unwrap();
+    write_table(
+        root.as_node(),
+        Some(("Time", "Position")),
+        to_iter(Euler.integrate(|t, x| -t * x, 1.1, 0.0, 0.1))
+            .take(11)
+            .enumerate()
+            .map(|(i, x)| (i as f64 * 0.1, x)),
+    );
 }
 
 trait Integrator<N: Mul<f64, Output = N> + Add<Output = N> + Copy> {
@@ -39,7 +58,6 @@ trait Integrator<N: Mul<f64, Output = N> + Add<Output = N> + Copy> {
     }
 }
 
-
 struct Euler;
 
 impl<N: Mul<f64, Output = N> + Add<Output = N> + Copy> Integrator<N> for Euler {
@@ -48,3 +66,51 @@ impl<N: Mul<f64, Output = N> + Add<Output = N> + Copy> Integrator<N> for Euler {
     }
 }
 
+fn write_table<H, R, I>(node: &Node, header: Option<H>, rows: I)
+    where H: Into<TableRow>, R: Into<TableRow>, I: IntoIterator<Item=R>
+{
+    let table = document().create_element("table");
+    if let Some(header) = header {
+        let tr = document().create_element("tr");
+        for cell in &header.into().cells {
+            let th = document().create_element("th");
+            th.append_child(cell);
+            tr.append_child(&th);
+        }
+        table.append_child(&tr);
+    }
+
+    for row in rows {
+        let tr = document().create_element("tr");
+        for cell in &row.into().cells {
+            let td = document().create_element("td");
+            td.append_child(cell);
+            tr.append_child(&td);
+        }
+        table.append_child(&tr);
+    }
+
+    node.append_child(&table);
+}
+
+struct TableRow {
+    cells: Vec<Node>,
+}
+
+impl<'a, 'b> Into<TableRow> for (&'a str, &'b str) {
+    fn into(self) -> TableRow {
+        TableRow { cells: vec![
+            document().create_text_node(self.0).as_node().clone(),
+            document().create_text_node(self.1).as_node().clone(),
+        ] }
+    }
+}
+
+impl Into<TableRow> for (f64, f64) {
+    fn into(self) -> TableRow {
+        TableRow { cells: vec![
+            document().create_text_node(&format!("{:.6}", self.0)).as_node().clone(),
+            document().create_text_node(&format!("{:.6}", self.1)).as_node().clone(),
+        ] }
+    }
+}
