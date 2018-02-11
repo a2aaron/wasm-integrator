@@ -1,24 +1,69 @@
+#![feature(conservative_impl_trait, generators, generator_trait, never_type)]
+
 extern crate stdweb;
 
 use stdweb::web::{document, INode, Node};
 
+use std::ops::{GeneratorState, Generator, Add, Mul};
+
+fn to_iter<G, Y>(gen: G) -> impl Iterator<Item=Y>
+    where G: Generator<Yield=Y>
+{
+    (0..).scan(gen, |state, _| {
+        match state.resume() {
+            GeneratorState::Yielded(x) => Some(x),
+            GeneratorState::Complete(_) => None,
+        }
+    })
+}
+
 fn main() {
     stdweb::initialize();
     let root = document().query_selector("body").unwrap();
-
     write_table(
         root.as_node(),
         Some(("Time", "Position")),
-        (0..11).scan((1.0, 0.0), |state, _| {
-            let (x, t) = *state;
-            *state = euler_step(&|_, x| -x, state.0, 0.1, state.1);
-            Some((t, x))
-        }),
+        to_iter(Euler.integrate(|t, x| -t * x, 1.1, 0.0, 0.1))
+            .take(11)
+            .enumerate()
+            .map(|(i, x)| (i as f64 * 0.1, x)),
     );
 }
 
-struct TableRow {
-    cells: Vec<Node>,
+trait Integrator<N: Mul<f64, Output = N> + Add<Output = N> + Copy> {
+    fn step<F: Fn(f64, N) -> N>(&self, f: F, x0: N, t0: f64, dt: f64) -> N;
+
+    fn integrate<'a, F>(&'a self, f: F, mut x0: N, mut t0: f64, dt: f64)
+        -> Box<Generator<Return = !, Yield = N> + 'a>
+        where N: 'a, F: Fn(f64, N) -> N + 'a
+    {
+        Box::new(move || {
+            loop {
+                let x_next = self.step(&f, x0, t0, dt);
+                x0 = x_next;
+                yield x_next;
+                t0 = t0 + dt;
+            }
+        })
+    }
+
+    fn integrate_to<F: Fn(f64, N) -> N>(&self, f: F, mut x0: N, mut t0: f64, t_end: f64, dt: f64) -> N {
+        while t0 + dt < t_end {
+            x0 = self.step(&f, x0, t0, dt);
+            t0 = t0 + dt;
+        }
+        // Take one last small step to land right on t_end
+        let t_diff = t_end - t0;
+        self.step(&f, x0, t0, t_diff)
+    }
+}
+
+struct Euler;
+
+impl<N: Mul<f64, Output = N> + Add<Output = N> + Copy> Integrator<N> for Euler {
+    fn step<F: Fn(f64, N) -> N>(&self, f: F, x0: N, t0: f64, dt: f64) -> N {
+        x0 + f(t0, x0) * dt
+    }
 }
 
 fn write_table<H, R, I>(node: &Node, header: Option<H>, rows: I)
@@ -48,11 +93,9 @@ fn write_table<H, R, I>(node: &Node, header: Option<H>, rows: I)
     node.append_child(&table);
 }
 
-
-fn euler_step<F: Fn(f64, f64) -> f64>(f: &F, x0: f64, dt: f64, t: f64) -> (f64, f64) {
-    (x0 + dt * f(t, x0), t + dt)
+struct TableRow {
+    cells: Vec<Node>,
 }
-
 
 impl<'a, 'b> Into<TableRow> for (&'a str, &'b str) {
     fn into(self) -> TableRow {
