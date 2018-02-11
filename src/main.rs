@@ -22,11 +22,12 @@ fn main() {
     let root = document().query_selector("body").unwrap();
     write_table(
         root.as_node(),
-        Some(("Time", "Position")),
+        Some(("Time", "Euler Position", "RK4 Position")),
         to_iter(Euler.integrate(|t, x| -t * x, 1.1, 0.0, 0.1))
+            .zip(to_iter(RK4.integrate(|t, x| -t * x, 1.1, 0.0, 0.1)))
             .take(11)
             .enumerate()
-            .map(|(i, x)| (i as f64 * 0.1, x)),
+            .map(|(i, (xe, xr))| (i as f64 * 0.1, xe, xr))
     );
 }
 
@@ -63,6 +64,18 @@ struct Euler;
 impl<N: Mul<f64, Output = N> + Add<Output = N> + Copy> Integrator<N> for Euler {
     fn step<F: Fn(f64, N) -> N>(&self, f: F, x0: N, t0: f64, dt: f64) -> N {
         x0 + f(t0, x0) * dt
+    }
+}
+
+struct RK4;
+
+impl<N: Mul<f64, Output = N> + Add<Output = N> + Copy> Integrator<N> for RK4 {
+    fn step<F: Fn(f64, N) -> N>(&self, f: F, x0: N, t0: f64, dt: f64) -> N {
+        let k1 = f(t0, x0);
+        let k2 = f(t0 + dt / 2.0, x0 + k1 * (dt / 2.0));
+        let k3 = f(t0 + dt / 2.0, x0 + k2 * (dt / 2.0));
+        let k4 = f(t0 + dt, x0 + k3 * dt);
+        x0 + (k1 + k2 * 2.0 + k3 * 2.0 + k4) * (dt / 6.0)
     }
 }
 
@@ -106,11 +119,32 @@ impl<'a, 'b> Into<TableRow> for (&'a str, &'b str) {
     }
 }
 
+impl<'a, 'b, 'c> Into<TableRow> for (&'a str, &'b str, &'c str) {
+    fn into(self) -> TableRow {
+        TableRow { cells: vec![
+            document().create_text_node(self.0).as_node().clone(),
+            document().create_text_node(self.1).as_node().clone(),
+            document().create_text_node(self.2).as_node().clone(),
+        ] }
+    }
+}
+
+
 impl Into<TableRow> for (f64, f64) {
     fn into(self) -> TableRow {
         TableRow { cells: vec![
             document().create_text_node(&format!("{:.6}", self.0)).as_node().clone(),
             document().create_text_node(&format!("{:.6}", self.1)).as_node().clone(),
+        ] }
+    }
+}
+
+impl Into<TableRow> for (f64, f64, f64) {
+    fn into(self) -> TableRow {
+        TableRow { cells: vec![
+            document().create_text_node(&format!("{:.6}", self.0)).as_node().clone(),
+            document().create_text_node(&format!("{:.6}", self.1)).as_node().clone(),
+            document().create_text_node(&format!("{:.6}", self.2)).as_node().clone(),
         ] }
     }
 }
