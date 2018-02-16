@@ -4,16 +4,15 @@ extern crate stdweb;
 
 use stdweb::web::{document, INode, Node};
 
-use std::ops::{GeneratorState, Generator, Add, Mul};
+use std::ops::{Add, Generator, GeneratorState, Mul};
 
-fn to_iter<G, Y>(gen: G) -> impl Iterator<Item=Y>
-    where G: Generator<Yield=Y>
+fn to_iter<G, Y>(gen: G) -> impl Iterator<Item = Y>
+where
+    G: Generator<Yield = Y>,
 {
-    (0..).scan(gen, |state, _| {
-        match state.resume() {
-            GeneratorState::Yielded(x) => Some(x),
-            GeneratorState::Complete(_) => None,
-        }
+    (0..).scan(gen, |state, _| match state.resume() {
+        GeneratorState::Yielded(x) => Some(x),
+        GeneratorState::Complete(_) => None,
     })
 }
 
@@ -27,28 +26,40 @@ fn main() {
             .zip(to_iter(RK4.integrate(|t, x| -t * x, 1.1, 0.0, 0.1)))
             .take(11)
             .enumerate()
-            .map(|(i, (xe, xr))| (i as f64 * 0.1, xe, xr))
+            .map(|(i, (xe, xr))| (i as f64 * 0.1, xe, xr)),
     );
 }
 
 trait Integrator<N: Mul<f64, Output = N> + Add<Output = N> + Copy> {
     fn step<F: Fn(f64, N) -> N>(&self, f: F, x0: N, t0: f64, dt: f64) -> N;
 
-    fn integrate<'a, F>(&'a self, f: F, mut x0: N, mut t0: f64, dt: f64)
-        -> Box<Generator<Return = !, Yield = N> + 'a>
-        where N: 'a, F: Fn(f64, N) -> N + 'a
+    fn integrate<'a, F>(
+        &'a self,
+        f: F,
+        mut x0: N,
+        mut t0: f64,
+        dt: f64,
+    ) -> Box<Generator<Return = !, Yield = N> + 'a>
+    where
+        N: 'a,
+        F: Fn(f64, N) -> N + 'a,
     {
-        Box::new(move || {
-            loop {
-                let x_next = self.step(&f, x0, t0, dt);
-                x0 = x_next;
-                yield x_next;
-                t0 = t0 + dt;
-            }
+        Box::new(move || loop {
+            let x_next = self.step(&f, x0, t0, dt);
+            x0 = x_next;
+            yield x_next;
+            t0 = t0 + dt;
         })
     }
 
-    fn integrate_to<F: Fn(f64, N) -> N>(&self, f: F, mut x0: N, mut t0: f64, t_end: f64, dt: f64) -> N {
+    fn integrate_to<F: Fn(f64, N) -> N>(
+        &self,
+        f: F,
+        mut x0: N,
+        mut t0: f64,
+        t_end: f64,
+        dt: f64,
+    ) -> N {
         while t0 + dt < t_end {
             x0 = self.step(&f, x0, t0, dt);
             t0 = t0 + dt;
@@ -80,7 +91,10 @@ impl<N: Mul<f64, Output = N> + Add<Output = N> + Copy> Integrator<N> for RK4 {
 }
 
 fn write_table<H, R, I>(node: &Node, header: Option<H>, rows: I)
-    where H: Into<TableRow>, R: Into<TableRow>, I: IntoIterator<Item=R>
+where
+    H: Into<TableRow>,
+    R: Into<TableRow>,
+    I: IntoIterator<Item = R>,
 {
     let table = document().create_element("table");
     if let Some(header) = header {
@@ -112,39 +126,61 @@ struct TableRow {
 
 impl<'a, 'b> Into<TableRow> for (&'a str, &'b str) {
     fn into(self) -> TableRow {
-        TableRow { cells: vec![
-            document().create_text_node(self.0).as_node().clone(),
-            document().create_text_node(self.1).as_node().clone(),
-        ] }
+        TableRow {
+            cells: vec![
+                document().create_text_node(self.0).as_node().clone(),
+                document().create_text_node(self.1).as_node().clone(),
+            ],
+        }
     }
 }
 
 impl<'a, 'b, 'c> Into<TableRow> for (&'a str, &'b str, &'c str) {
     fn into(self) -> TableRow {
-        TableRow { cells: vec![
-            document().create_text_node(self.0).as_node().clone(),
-            document().create_text_node(self.1).as_node().clone(),
-            document().create_text_node(self.2).as_node().clone(),
-        ] }
+        TableRow {
+            cells: vec![
+                document().create_text_node(self.0).as_node().clone(),
+                document().create_text_node(self.1).as_node().clone(),
+                document().create_text_node(self.2).as_node().clone(),
+            ],
+        }
     }
 }
 
-
 impl Into<TableRow> for (f64, f64) {
     fn into(self) -> TableRow {
-        TableRow { cells: vec![
-            document().create_text_node(&format!("{:.6}", self.0)).as_node().clone(),
-            document().create_text_node(&format!("{:.6}", self.1)).as_node().clone(),
-        ] }
+        TableRow {
+            cells: vec![
+                document()
+                    .create_text_node(&format!("{:.6}", self.0))
+                    .as_node()
+                    .clone(),
+                document()
+                    .create_text_node(&format!("{:.6}", self.1))
+                    .as_node()
+                    .clone(),
+            ],
+        }
     }
 }
 
 impl Into<TableRow> for (f64, f64, f64) {
     fn into(self) -> TableRow {
-        TableRow { cells: vec![
-            document().create_text_node(&format!("{:.6}", self.0)).as_node().clone(),
-            document().create_text_node(&format!("{:.6}", self.1)).as_node().clone(),
-            document().create_text_node(&format!("{:.6}", self.2)).as_node().clone(),
-        ] }
+        TableRow {
+            cells: vec![
+                document()
+                    .create_text_node(&format!("{:.6}", self.0))
+                    .as_node()
+                    .clone(),
+                document()
+                    .create_text_node(&format!("{:.6}", self.1))
+                    .as_node()
+                    .clone(),
+                document()
+                    .create_text_node(&format!("{:.6}", self.2))
+                    .as_node()
+                    .clone(),
+            ],
+        }
     }
 }
